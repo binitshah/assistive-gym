@@ -119,8 +119,10 @@ class ScratchItchEnv(AssistiveEnv):
             self.world_creation.set_gripper_open_position(self.robot, position=0.25, left=True, set_instantly=True)
             self.tool = self.world_creation.init_tool(self.robot, mesh_scale=[0.001]*3, pos_offset=[0, 0, 0], orient_offset=p.getQuaternionFromEuler([0, 0, 0], physicsClientId=self.id), maximal=False)
         elif self.robot_type == 'jaco':
-            target_pos = np.array([-0.5, 0, 0.8]) + self.np_random.uniform(-0.05, 0.05, size=3)
-            target_orient = p.getQuaternionFromEuler(np.array([0, np.pi/2.0, 0]), physicsClientId=self.id)
+            #target_pos = np.array([-0.5, 0, 0.8]) + self.np_random.uniform(-0.05, 0.05, size=3)
+            head_pos, head_orient = p.getLinkState(self.human, 23, computeForwardKinematics=True, physicsClientId=self.id)[:2]
+            target_pos = head_pos - np.array([0, 0.3, 0]) + self.np_random.uniform(-0.05, 0.05, size=3)
+            target_orient = p.getQuaternionFromEuler(np.array([-np.pi/2.0, np.pi/2.0, 0]), physicsClientId=self.id)
             self.util.ik_random_restarts(self.robot, 8, target_pos, target_orient, self.world_creation, self.robot_left_arm_joint_indices, self.robot_lower_limits, self.robot_upper_limits, ik_indices=[0, 1, 2, 3, 4, 5, 6], max_iterations=1000, max_ik_random_restarts=40, random_restart_threshold=0.03, step_sim=True)
             self.world_creation.set_gripper_open_position(self.robot, position=1, left=True, set_instantly=True)
             self.tool = self.world_creation.init_tool(self.robot, mesh_scale=[0.001]*3, pos_offset=[0, 0, 0.02], orient_offset=p.getQuaternionFromEuler([0, -np.pi/2.0, 0], physicsClientId=self.id), maximal=False)
@@ -145,14 +147,12 @@ class ScratchItchEnv(AssistiveEnv):
         return self._get_obs([0], [0, 0])
 
     def generate_target(self):
-        # Randomly select either upper arm or forearm for the target limb to scratch
         if self.gender == 'male':
-            self.limb, length, radius = [[5, 0.279, 0.043], [7, 0.257, 0.033]][self.np_random.randint(2)]
-        else:
-            self.limb, length, radius = [[5, 0.264, 0.0355], [7, 0.234, 0.027]][self.np_random.randint(2)]
-        self.target_on_arm = self.util.point_on_capsule(p1=np.array([0, 0, 0]), p2=np.array([0, 0, -length]), radius=radius, theta_range=(0, np.pi*2))
-        arm_pos, arm_orient = p.getLinkState(self.human, self.limb, computeForwardKinematics=True, physicsClientId=self.id)[:2]
-        target_pos, target_orient = p.multiplyTransforms(arm_pos, arm_orient, self.target_on_arm, [0, 0, 0, 1], physicsClientId=self.id)
+            self.mouth_pos = [0, -0.11, 0.03]
+        else :
+            self.mouth_pos = [0, -0.11, 0.03]
+        head_pos, head_orient = p.getLinkState(self.human, 23, computeForwardKinematics=True, physicsClientId=self.id)[ :2]
+        target_pos, target_orient = p.multiplyTransforms(head_pos, head_orient, self.mouth_pos, [0, 0, 0, 1],physicsClientId=self.id)
 
         sphere_collision = -1
         sphere_visual = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=0.01, rgbaColor=[0, 1, 1, 1], physicsClientId=self.id)
@@ -161,8 +161,8 @@ class ScratchItchEnv(AssistiveEnv):
         self.update_targets()
 
     def update_targets(self):
-        arm_pos, arm_orient = p.getLinkState(self.human, self.limb, computeForwardKinematics=True, physicsClientId=self.id)[:2]
-        target_pos, target_orient = p.multiplyTransforms(arm_pos, arm_orient, self.target_on_arm, [0, 0, 0, 1], physicsClientId=self.id)
+        head_pos, head_orient = p.getLinkState(self.human, 23, computeForwardKinematics=True, physicsClientId=self.id)[ :2]
+        target_pos, target_orient = p.multiplyTransforms(head_pos, head_orient, self.mouth_pos, [0, 0, 0, 1],physicsClientId=self.id)
         self.target_pos = np.array(target_pos)
         p.resetBasePositionAndOrientation(self.target, self.target_pos, [0, 0, 0, 1], physicsClientId=self.id)
 
