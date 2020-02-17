@@ -27,7 +27,7 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
-*.pt
+trained_models/ppo/*.pt
 *.zip
 
 # PyInstaller
