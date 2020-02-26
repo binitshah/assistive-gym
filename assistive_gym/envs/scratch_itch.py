@@ -2,6 +2,7 @@ import os
 from gym import spaces
 import numpy as np
 import pybullet as p
+import random
 
 from .env import AssistiveEnv
 
@@ -12,6 +13,7 @@ class ScratchItchEnv(AssistiveEnv):
     def step(self, action):
         self.take_step(action, robot_arm='left', gains=self.config('robot_gains'), forces=self.config('robot_forces'), human_gains=0.05)
 
+        self.get_face_pain()
         total_force_on_human, tool_force, tool_force_at_target, target_contact_pos = self.get_total_force()
         end_effector_velocity = np.linalg.norm(p.getLinkState(self.tool, 1, computeForwardKinematics=True, computeLinkVelocity=True, physicsClientId=self.id)[6])
         if target_contact_pos is not None:
@@ -40,6 +42,20 @@ class ScratchItchEnv(AssistiveEnv):
         done = False
 
         return obs, reward, done, info
+
+    def get_face_pain(self):
+        # face_forces = np.zeros((20, 20))
+        # topleft, topright, bottomleft, bottomright = (-0.10, 0.18), (0.10, 0.18), (-0.10, -0.02), (0.10, -0.02)
+        # for c in p.getContactPoints(bodyA=self.human, physicsClientId=self.id):
+        #     if c[3] == 23:
+        #         x, _, z = c[5]
+        #         xi, yi = (round((x / (topright[0] - topleft[0])) * 19), round((z / (topleft[1] - bottomleft[1])) * 19))
+        #         print(xi, yi)
+        # contacts = p.getContactPoints(bodyA=self.tool, bodyB=self.human, linkIndexB=23)
+        # print(len(contacts))
+        # for c in contacts:
+        #     print(c[8] * 1000)
+        pass
 
     def get_total_force(self):
         total_force_on_human = 0
@@ -148,11 +164,12 @@ class ScratchItchEnv(AssistiveEnv):
 
     def generate_target(self):
         if self.gender == 'male':
-            self.mouth_pos = [0, -0.11, 0.03]
+            i = random.randint(0, 7)
+            self.selected_pos = [[0, -.11, .13], [.04, -.10, .13], [-.04, -.10, .13], [.05, -.095, .06], [-.05, -.095, .06], [0, -.11, .01], [0, -.11, .05], [.02, -.10, .10]][i]
         else :
-            self.mouth_pos = [0, -0.11, 0.03]
+            self.selected_pos = [0, -0.11, 0.03]
         head_pos, head_orient = p.getLinkState(self.human, 23, computeForwardKinematics=True, physicsClientId=self.id)[ :2]
-        target_pos, target_orient = p.multiplyTransforms(head_pos, head_orient, self.mouth_pos, [0, 0, 0, 1],physicsClientId=self.id)
+        target_pos, target_orient = p.multiplyTransforms(head_pos, head_orient, self.selected_pos, [0, 0, 0, 1], physicsClientId=self.id)
 
         sphere_collision = -1
         sphere_visual = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=0.01, rgbaColor=[0, 1, 1, 1], physicsClientId=self.id)
@@ -162,7 +179,7 @@ class ScratchItchEnv(AssistiveEnv):
 
     def update_targets(self):
         head_pos, head_orient = p.getLinkState(self.human, 23, computeForwardKinematics=True, physicsClientId=self.id)[ :2]
-        target_pos, target_orient = p.multiplyTransforms(head_pos, head_orient, self.mouth_pos, [0, 0, 0, 1],physicsClientId=self.id)
+        target_pos, target_orient = p.multiplyTransforms(head_pos, head_orient, self.selected_pos, [0, 0, 0, 1], physicsClientId=self.id)
         self.target_pos = np.array(target_pos)
         p.resetBasePositionAndOrientation(self.target, self.target_pos, [0, 0, 0, 1], physicsClientId=self.id)
 
