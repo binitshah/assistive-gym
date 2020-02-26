@@ -6,7 +6,7 @@ env = gym.make('ScratchItchJaco-v0')
 env.render()
 observation = env.reset()
 # env.world_creation.print_joint_info(env.robot)
-keys_actions = {p.B3G_SPACE: np.array([0, 0.01, 0]), p.B3G_BACKSPACE: np.array([0, -0.01, 0]), p.B3G_LEFT_ARROW: np.array([-0.01, 0, 0]), p.B3G_RIGHT_ARROW: np.array([0.01, 0, 0]), p.B3G_UP_ARROW: np.array([0, 0, 0.01]), p.B3G_DOWN_ARROW: np.array([0, 0, -0.01])}
+keys_actions = {p.B3G_SPACE: np.array([0, 0.01, 0]), p.B3G_SHIFT: np.array([0, -0.01, 0]), p.B3G_LEFT_ARROW: np.array([-0.01, 0, 0]), p.B3G_RIGHT_ARROW: np.array([0.01, 0, 0]), p.B3G_UP_ARROW: np.array([0, 0, 0.01]), p.B3G_DOWN_ARROW: np.array([0, 0, -0.01])}
 
 # Get the position and orientation of the end effector
 position, orientation = p.getLinkState(env.robot, 8, computeForwardKinematics=True)[:2]

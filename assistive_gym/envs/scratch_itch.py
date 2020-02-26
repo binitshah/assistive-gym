@@ -3,6 +3,7 @@ from gym import spaces
 import numpy as np
 import pybullet as p
 import random
+from scipy.spatial.transform import Rotation as R
 
 from .env import AssistiveEnv
 
@@ -13,7 +14,6 @@ class ScratchItchEnv(AssistiveEnv):
     def step(self, action):
         self.take_step(action, robot_arm='left', gains=self.config('robot_gains'), forces=self.config('robot_forces'), human_gains=0.05)
 
-        self.get_face_pain()
         total_force_on_human, tool_force, tool_force_at_target, target_contact_pos = self.get_total_force()
         end_effector_velocity = np.linalg.norm(p.getLinkState(self.tool, 1, computeForwardKinematics=True, computeLinkVelocity=True, physicsClientId=self.id)[6])
         if target_contact_pos is not None:
@@ -22,6 +22,24 @@ class ScratchItchEnv(AssistiveEnv):
 
         # Get human preferences
         preferences_score = self.human_preferences(end_effector_velocity=end_effector_velocity, total_force_on_human=total_force_on_human, tool_force_at_target=tool_force_at_target)
+        noicepters_density = np.array([[ 0,  0,  0,  0, 16, 16, 16, 16, 16,  0,  0,  0,  0],
+                                       [ 0,  0,  0, 16, 16, 16, 16, 16, 16, 16,  0,  0,  0],
+                                       [ 0,  0, 16, 16, 16, 16, 16, 16, 16, 16, 16,  0,  0],
+                                       [ 0, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,  0],
+                                       [16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+                                       [16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+                                       [16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+                                       [ 0,  0,  0,  0,  4,  4,  4,  4,  4,  0,  0,  0,  0],
+                                       [12, 12, 12, 12, 12,  8,  8,  8, 12, 12, 12, 12, 12],
+                                       [12, 12, 12, 12,  8,  8,  8,  8,  8, 12, 12, 12, 12],
+                                       [12, 12, 12, 12,  8,  8,  8,  8,  8, 12, 12, 12, 12],
+                                       [12, 12,  4,  4,  4,  4,  4,  4,  4,  4,  4, 12, 12],
+                                       [12, 12,  4,  4,  4,  4,  4,  4,  4,  4,  4, 12, 12],
+                                       [ 0, 12,  0,  0,  0,  0,  0,  0,  0,  0,  0, 12,  0],
+                                       [ 0, 12,  4,  4,  4,  4,  4,  4,  4,  4,  4, 12,  0],
+                                       [ 0,  0,  4,  4,  4,  4,  4,  4,  4,  4,  4,  0,  0],
+                                       [ 0,  0,  0,  0,  4,  4,  4,  4,  4,  0,  0,  0,  0]])
+        pain = self.get_face_pain(noicepters_density)
 
         tool_pos = np.array(p.getLinkState(self.tool, 1, computeForwardKinematics=True, physicsClientId=self.id)[0])
         reward_distance = -np.linalg.norm(self.target_pos - tool_pos) # Penalize distances away from target
@@ -33,7 +51,7 @@ class ScratchItchEnv(AssistiveEnv):
             self.prev_target_contact_pos = target_contact_pos
             self.task_success += 1
 
-        reward = self.config('distance_weight')*reward_distance + self.config('action_weight')*reward_action + self.config('tool_force_weight')*tool_force_at_target + self.config('scratch_reward_weight')*reward_force_scratch + preferences_score
+        reward = self.config('distance_weight')*reward_distance + self.config('action_weight')*reward_action + self.config('tool_force_weight')*tool_force_at_target + self.config('scratch_reward_weight')*reward_force_scratch + preferences_score - pain
 
         if self.gui and tool_force_at_target > 0:
             print('Task success:', self.task_success, 'Tool force at target:', tool_force_at_target, reward_force_scratch)
@@ -43,19 +61,28 @@ class ScratchItchEnv(AssistiveEnv):
 
         return obs, reward, done, info
 
-    def get_face_pain(self):
-        # face_forces = np.zeros((20, 20))
-        # topleft, topright, bottomleft, bottomright = (-0.10, 0.18), (0.10, 0.18), (-0.10, -0.02), (0.10, -0.02)
-        # for c in p.getContactPoints(bodyA=self.human, physicsClientId=self.id):
-        #     if c[3] == 23:
-        #         x, _, z = c[5]
-        #         xi, yi = (round((x / (topright[0] - topleft[0])) * 19), round((z / (topleft[1] - bottomleft[1])) * 19))
-        #         print(xi, yi)
-        # contacts = p.getContactPoints(bodyA=self.tool, bodyB=self.human, linkIndexB=23)
-        # print(len(contacts))
-        # for c in contacts:
-        #     print(c[8] * 1000)
-        pass
+    def get_face_pain(self, noicepters_density):
+        topleft, topright, bottomleft, bottomright = (-0.10, 0.18), (0.10, 0.18), (-0.10, -0.02), (0.10, -0.02)
+        pain = 0
+        for c in p.getContactPoints(bodyA=self.human, linkIndexA=23):
+            contact_dist = c[8]
+            contact_force = c[9]
+            s_Contact_pos = c[5]
+
+            if contact_force > 4.0:
+                s_Head_pos, s_Head_ori = p.getLinkState(self.human, linkIndex=23)[:2]
+                s_T_b = np.zeros((4, 4))
+                s_T_b[0:3,0:3] = R.from_quat(s_Head_ori).as_matrix()
+                s_T_b[0:4,3] = np.array([s_Head_pos[0], s_Head_pos[1], s_Head_pos[2], 1])
+                b_Contact_pos = np.dot(np.linalg.inv(s_T_b), np.array([s_Contact_pos[0], s_Contact_pos[1], s_Contact_pos[2], 1]))
+                # print(b_Contact_pos[0], b_Contact_pos[2])
+                xi, zi = (int(round((b_Contact_pos[0] / (topright[0] - topleft[0])) * 19)) + 7, 15 - int(round((b_Contact_pos[2] / (topleft[1] - bottomleft[1])) * 19)))
+                xi = 0 if xi < 0 or xi >= 13 else xi
+                zi = 0 if zi < 0 or zi >= 17 else zi
+                pain += abs(noicepters_density[zi, xi] * contact_dist * 2000)
+
+        return pain
+
 
     def get_total_force(self):
         total_force_on_human = 0
