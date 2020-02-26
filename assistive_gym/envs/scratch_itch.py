@@ -51,7 +51,7 @@ class ScratchItchEnv(AssistiveEnv):
             self.prev_target_contact_pos = target_contact_pos
             self.task_success += 1
 
-        reward = self.config('distance_weight')*reward_distance + self.config('action_weight')*reward_action + self.config('tool_force_weight')*tool_force_at_target + self.config('scratch_reward_weight')*reward_force_scratch + preferences_score - pain
+        reward = self.config('distance_weight')*reward_distance + self.config('action_weight')*reward_action + self.config('tool_force_weight')*tool_force_at_target + self.config('scratch_reward_weight')*reward_force_scratch * 1.1 + preferences_score - pain
 
         if self.gui and tool_force_at_target > 0:
             print('Task success:', self.task_success, 'Tool force at target:', tool_force_at_target, reward_force_scratch)
@@ -79,7 +79,7 @@ class ScratchItchEnv(AssistiveEnv):
                 xi, zi = (int(round((b_Contact_pos[0] / (topright[0] - topleft[0])) * 19)) + 7, 15 - int(round((b_Contact_pos[2] / (topleft[1] - bottomleft[1])) * 19)))
                 xi = 0 if xi < 0 or xi >= 13 else xi
                 zi = 0 if zi < 0 or zi >= 17 else zi
-                pain += abs(noicepters_density[zi, xi] * contact_dist * 2000)
+                pain += abs(noicepters_density[zi, xi] * contact_dist * 1000)
 
         return pain
 
